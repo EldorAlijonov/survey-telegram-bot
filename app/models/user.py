@@ -12,8 +12,6 @@ class User(TimestampMixin, Base):
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    address: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    education_place: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_registered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     has_completed_survey: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_subscribed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

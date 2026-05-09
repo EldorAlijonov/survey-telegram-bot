@@ -1,3 +1,4 @@
+import asyncio
 from html import escape
 
 from aiogram import Bot, F, Router
@@ -15,12 +16,17 @@ from app.keyboards.admin_inline import (
 from app.keyboards.admin_reply import broadcast_menu_keyboard, cancel_admin_keyboard
 from app.models.broadcast import Broadcast, BroadcastStatus
 from app.services.admin_service import AdminService
-from app.services.broadcast_service import BroadcastService
+from app.services.broadcast_service import BroadcastService, parse_message_ids, parse_reply_markup
 from app.states.broadcast_states import BroadcastStates
+from app.utils.callbacks import safe_callback_answer
 from app.utils.date_utils import format_dt
 from app.utils.pagination import clamp_page, pages_count
 
 router = Router(name="admin_broadcast")
+
+ALBUM_COLLECT_DELAY = 1.2
+_album_lock = asyncio.Lock()
+_album_buffers: dict[tuple[int, int, str], list[Message]] = {}
 
 
 @router.message(F.text == "➕ Reklama yaratish")
@@ -46,15 +52,21 @@ async def receive_broadcast_post(
 ) -> None:
     if message.text == "❌ Bekor qilish":
         return
+    messages = await collect_album_messages(message)
+    if messages is None:
+        return
+    source_message = messages[0]
     admin = await admin_service.get_admin(message.from_user.id)
-    content_type, preview = extract_broadcast_preview(message)
+    content_type, preview = extract_broadcast_preview(messages)
     draft = await broadcast_service.create_draft(
         admin_id=admin.id if admin else None,
         admin_username=message.from_user.username if message.from_user else None,
-        chat_id=message.chat.id,
-        message_id=message.message_id,
+        chat_id=source_message.chat.id,
+        message_id=source_message.message_id,
+        message_ids=[item.message_id for item in messages],
         content_type=content_type,
         preview=preview,
+        reply_markup=serialize_reply_markup(messages),
     )
     await state.clear()
     await message.answer("✅ Reklama saqlandi.", reply_markup=broadcast_menu_keyboard())
@@ -72,15 +84,21 @@ async def receive_broadcast_edit(
 ) -> None:
     if message.text == "❌ Bekor qilish":
         return
+    messages = await collect_album_messages(message)
+    if messages is None:
+        return
+    source_message = messages[0]
     data = await state.get_data()
     broadcast_id = int(data["broadcast_id"])
-    content_type, preview = extract_broadcast_preview(message)
+    content_type, preview = extract_broadcast_preview(messages)
     ok, text = await broadcast_service.update_source(
         broadcast_id,
-        chat_id=message.chat.id,
-        message_id=message.message_id,
+        chat_id=source_message.chat.id,
+        message_id=source_message.message_id,
+        message_ids=[item.message_id for item in messages],
         content_type=content_type,
         preview=preview,
+        reply_markup=serialize_reply_markup(messages),
     )
     await state.clear()
     await message.answer(text, reply_markup=broadcast_menu_keyboard())
@@ -102,7 +120,7 @@ async def list_broadcasts_callback(
     if callback.message:
         text, keyboard = await build_broadcasts_page(broadcast_service, settings, page)
         await callback.message.edit_text(text, reply_markup=keyboard)
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("broadcast:view:"))
@@ -110,18 +128,27 @@ async def view_broadcast(callback: CallbackQuery, bot: Bot, broadcast_service: B
     broadcast_id = int(callback.data.split(":")[-1])
     broadcast = await broadcast_service.get(broadcast_id)
     if broadcast is None:
-        await callback.answer("Reklama topilmadi.", show_alert=True)
+        await safe_callback_answer(callback, "Reklama topilmadi.", show_alert=True)
         return
     try:
-        await bot.copy_message(
-            chat_id=callback.from_user.id,
-            from_chat_id=broadcast.source_chat_id,
-            message_id=broadcast.source_message_id,
-        )
+        message_ids = parse_message_ids(broadcast)
+        if len(message_ids) == 1:
+            await bot.copy_message(
+                chat_id=callback.from_user.id,
+                from_chat_id=broadcast.source_chat_id,
+                message_id=message_ids[0],
+                reply_markup=parse_reply_markup(broadcast.reply_markup),
+            )
+        else:
+            await bot.copy_messages(
+                chat_id=callback.from_user.id,
+                from_chat_id=broadcast.source_chat_id,
+                message_ids=message_ids,
+            )
     except TelegramAPIError:
-        await callback.answer("Reklamani ko'rsatib bo'lmadi. Manba xabar o'chirilgan bo'lishi mumkin.", show_alert=True)
+        await safe_callback_answer(callback, "Reklamani ko'rsatib bo'lmadi. Manba xabar o'chirilgan bo'lishi mumkin.", show_alert=True)
         return
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("broadcast:edit:"))
@@ -129,16 +156,16 @@ async def edit_broadcast_start(callback: CallbackQuery, state: FSMContext, broad
     broadcast_id = int(callback.data.split(":")[-1])
     broadcast = await broadcast_service.get(broadcast_id)
     if broadcast is None:
-        await callback.answer("Reklama topilmadi.", show_alert=True)
+        await safe_callback_answer(callback, "Reklama topilmadi.", show_alert=True)
         return
     if broadcast.status == BroadcastStatus.running:
-        await callback.answer("❌ Yuborilayotgan reklamani tahrirlab bo'lmaydi.", show_alert=True)
+        await safe_callback_answer(callback, "❌ Yuborilayotgan reklamani tahrirlab bo'lmaydi.", show_alert=True)
         return
     await state.set_state(BroadcastStates.editing_post)
     await state.update_data(broadcast_id=broadcast_id)
     if callback.message:
         await callback.message.answer("Yangi reklama postini yuboring.", reply_markup=cancel_admin_keyboard())
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("broadcast:delete:"))
@@ -149,7 +176,7 @@ async def delete_broadcast_prompt(callback: CallbackQuery) -> None:
             "Rostdan ham ushbu reklamani o'chirmoqchimisiz?",
             reply_markup=confirm_keyboard(f"broadcast:delete_confirm:{broadcast_id}"),
         )
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("broadcast:delete_confirm:"))
@@ -159,7 +186,7 @@ async def delete_broadcast_confirm(callback: CallbackQuery, broadcast_service: B
     if callback.message:
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.answer(text, reply_markup=broadcast_menu_keyboard())
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("broadcast:send:"))
@@ -167,14 +194,14 @@ async def send_broadcast_prompt(callback: CallbackQuery, broadcast_service: Broa
     broadcast_id = int(callback.data.split(":")[-1])
     broadcast = await broadcast_service.get(broadcast_id)
     if broadcast is None:
-        await callback.answer("Reklama topilmadi.", show_alert=True)
+        await safe_callback_answer(callback, "Reklama topilmadi.", show_alert=True)
         return
     if callback.message:
         await callback.message.answer(
             "Ushbu reklamani barcha foydalanuvchilarga yuborishni tasdiqlaysizmi?",
             reply_markup=send_confirm_keyboard(broadcast_id),
         )
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("broadcast:send_confirm:"))
@@ -184,6 +211,7 @@ async def send_broadcast_confirm(
     broadcast_service: BroadcastService,
 ) -> None:
     broadcast_id = int(callback.data.split(":")[-1])
+    await safe_callback_answer(callback)
     if callback.message:
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.answer("Reklama yuborish boshlandi. Iltimos, kuting.")
@@ -199,7 +227,6 @@ async def send_broadcast_confirm(
             f"Tugagan vaqt: {format_dt(broadcast.finished_at)}",
             reply_markup=broadcast_menu_keyboard(),
         )
-    await callback.answer()
 
 
 async def build_broadcasts_page(broadcast_service: BroadcastService, settings: Settings, page: int):
@@ -217,7 +244,32 @@ async def build_broadcasts_page(broadcast_service: BroadcastService, settings: S
     return "\n".join(rows), broadcast_list_keyboard([item.id for item in broadcasts], page, total_pages)
 
 
-def extract_broadcast_preview(message: Message) -> tuple[str, str]:
+async def collect_album_messages(message: Message) -> list[Message] | None:
+    if not message.media_group_id:
+        return [message]
+
+    from_user_id = message.from_user.id if message.from_user else 0
+    key = (message.chat.id, from_user_id, message.media_group_id)
+    async with _album_lock:
+        _album_buffers.setdefault(key, []).append(message)
+
+    await asyncio.sleep(ALBUM_COLLECT_DELAY)
+
+    async with _album_lock:
+        messages = sorted(_album_buffers.get(key, []), key=lambda item: item.message_id)
+        if not messages or message.message_id != messages[0].message_id:
+            return None
+        _album_buffers.pop(key, None)
+        return messages
+
+
+def extract_broadcast_preview(messages: list[Message]) -> tuple[str, str]:
+    if len(messages) > 1:
+        preview = next((item.caption for item in messages if item.caption), None)
+        if preview:
+            return "album", preview[:100]
+        return "album", f"{len(messages)} ta media"
+    message = messages[0]
     if message.text:
         return "text", message.text[:100]
     if message.caption:
@@ -235,6 +287,13 @@ def detect_content_type(message: Message) -> str:
     if message.document:
         return "document"
     return "message"
+
+
+def serialize_reply_markup(messages: list[Message]) -> str | None:
+    for message in messages:
+        if message.reply_markup is not None:
+            return message.reply_markup.model_dump_json(exclude_none=True)
+    return None
 
 
 def format_broadcast_card(broadcast: Broadcast) -> str:

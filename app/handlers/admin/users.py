@@ -10,6 +10,7 @@ from app.keyboards.admin_inline import pagination_keyboard
 from app.keyboards.admin_reply import date_select_keyboard
 from app.services.user_service import UserService
 from app.states.admin_states import AdminUsersStates
+from app.utils.callbacks import safe_callback_answer
 from app.utils.date_utils import format_dt, parse_uz_date, today, yesterday
 from app.utils.pagination import clamp_page, pages_count
 
@@ -51,7 +52,7 @@ async def users_page_callback(callback: CallbackQuery, user_service: UserService
     if callback.message:
         text, keyboard = await build_users_page(user_service, settings, day, page)
         await callback.message.edit_text(text, reply_markup=keyboard)
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 async def send_users_page(message: Message, user_service: UserService, settings: Settings, day: date, page: int) -> None:
@@ -72,13 +73,11 @@ async def build_users_page(user_service: UserService, settings: Settings, day: d
         username = escape("@" + user.username) if user.username else "-"
         full_name = escape(user.full_name or "-")
         phone = escape(user.phone or "-")
-        education_place = escape(user.education_place or "-")
         rows.append(
             f"ID: {user.telegram_id}\n"
             f"Username: {username}\n"
             f"Ism familya: {full_name}\n"
             f"Telefon: {phone}\n"
-            f"Ta'lim muassasasi: {education_place}\n"
             f"So'rovnoma holati: {status}\n"
             f"Sana: {format_dt(user.created_at)}\n"
         )

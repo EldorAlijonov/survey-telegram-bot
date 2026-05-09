@@ -32,7 +32,7 @@ async def back_to_user_menu(message: Message, state: FSMContext) -> None:
 
 @router.message(
     EditProfileStates.choosing,
-    F.text.in_({"Ism familya", "Telefon raqam", "Yashash manzili", "Ta’lim muassasasi", "Ta'lim muassasasi"}),
+    F.text.in_({"Ism familya", "Telefon raqam"}),
 )
 async def choose_edit_field(message: Message, state: FSMContext) -> None:
     mapping = {
@@ -41,9 +41,6 @@ async def choose_edit_field(message: Message, state: FSMContext) -> None:
             EditProfileStates.phone,
             "<b>Yangi telefon raqamingizni kiriting.</b>\n\nMisol:\n<b>+998901610714</b>",
         ),
-        "Yashash manzili": (EditProfileStates.address, "<b>Yangi yashash manzilingizni kiriting.</b>"),
-        "Ta’lim muassasasi": (EditProfileStates.education_place, "<b>Yangi ta’lim muassasangizni kiriting.</b>"),
-        "Ta'lim muassasasi": (EditProfileStates.education_place, "<b>Yangi ta’lim muassasangizni kiriting.</b>"),
     }
     item = mapping[message.text]
     await state.set_state(item[0])
@@ -92,22 +89,3 @@ async def update_phone(message: Message, state: FSMContext, user_service: UserSe
     await state.clear()
     await message.answer("<b>Telefon raqam yangilandi.</b>", reply_markup=after_finish_keyboard())
 
-
-@router.message(EditProfileStates.address, F.text)
-async def update_address(message: Message, state: FSMContext, user_service: UserService) -> None:
-    if len(message.text.strip()) < 5:
-        await message.answer(GENERIC_FORMAT_ERROR)
-        return
-    await user_service.update_profile(message.from_user.id, address=message.text.strip())
-    await state.clear()
-    await message.answer("<b>Yashash manzili yangilandi.</b>", reply_markup=after_finish_keyboard())
-
-
-@router.message(EditProfileStates.education_place, F.text)
-async def update_education(message: Message, state: FSMContext, user_service: UserService) -> None:
-    if len(message.text.strip()) < 2:
-        await message.answer(GENERIC_FORMAT_ERROR)
-        return
-    await user_service.update_profile(message.from_user.id, education_place=message.text.strip())
-    await state.clear()
-    await message.answer("<b>Ta’lim muassasasi yangilandi.</b>", reply_markup=after_finish_keyboard())

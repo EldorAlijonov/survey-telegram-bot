@@ -7,6 +7,7 @@ from app.keyboards.admin_inline import admins_list_keyboard, confirm_keyboard
 from app.keyboards.admin_reply import admin_manage_keyboard, cancel_admin_keyboard
 from app.services.admin_service import AdminService
 from app.states.admin_states import AdminManageStates
+from app.utils.callbacks import safe_callback_answer
 from app.utils.pagination import clamp_page, pages_count
 
 router = Router(name="admin_admins")
@@ -87,7 +88,7 @@ async def list_admins_callback(callback: CallbackQuery, admin_service: AdminServ
     if callback.message:
         text, keyboard = await build_admins_page(admin_service, settings, page)
         await callback.message.edit_text(text, reply_markup=keyboard)
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("admin:delete:"))
@@ -95,17 +96,17 @@ async def admin_delete_prompt(callback: CallbackQuery, admin_service: AdminServi
     admin_id = int(callback.data.split(":")[-1])
     admin = await admin_service.get_by_id(admin_id)
     if admin is None:
-        await callback.answer("Admin topilmadi.", show_alert=True)
+        await safe_callback_answer(callback, "Admin topilmadi.", show_alert=True)
         return
     if admin.is_main:
-        await callback.answer("Asosiy adminni o'chirib bo'lmaydi.", show_alert=True)
+        await safe_callback_answer(callback, "Asosiy adminni o'chirib bo'lmaydi.", show_alert=True)
         return
     if callback.message:
         await callback.message.answer(
             "Rostdan ham ushbu adminni o'chirmoqchimisiz?",
             reply_markup=confirm_keyboard(f"admin:delete_confirm:{admin_id}"),
         )
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("admin:delete_confirm:"))
@@ -115,7 +116,7 @@ async def admin_delete_confirm(callback: CallbackQuery, admin_service: AdminServ
     if callback.message:
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.answer(text, reply_markup=admin_manage_keyboard())
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 async def build_admins_page(admin_service: AdminService, settings: Settings, page: int):

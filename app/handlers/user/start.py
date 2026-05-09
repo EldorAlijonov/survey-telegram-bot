@@ -5,7 +5,7 @@ from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from app.keyboards.user_reply import after_finish_keyboard, remove_keyboard, start_survey_keyboard
+from app.keyboards.user_reply import after_finish_keyboard, contact_keyboard, remove_keyboard, start_survey_keyboard
 from app.middlewares.admin import NonAdminFilter
 from app.services.user_service import UserService
 from app.states.user_states import RegistrationStates
@@ -14,7 +14,10 @@ router = Router(name="user_start")
 router.message.filter(NonAdminFilter())
 
 
-FULL_NAME_PROMPT = "<b>Ism familyangizni kiriting.</b>\n\nMisol:\n<b>Alijonov Eldorjon</b>"
+PHONE_PROMPT = (
+    "<b>Telefon raqamingizni ulashing.</b>\n\n"
+    "Botdan to‘liq foydalanish uchun hozirda faol bo‘lgan telefon raqam kerak."
+)
 
 
 @router.message(CommandStart())
@@ -41,16 +44,14 @@ async def user_start(message: Message, state: FSMContext, user_service: UserServ
         )
         return
 
-    await state.set_state(RegistrationStates.full_name)
-    await message.answer(FULL_NAME_PROMPT)
+    await state.set_state(RegistrationStates.phone)
+    await message.answer(PHONE_PROMPT, reply_markup=contact_keyboard())
 
 
 @router.message(
     StateFilter(
         RegistrationStates.full_name,
         RegistrationStates.phone,
-        RegistrationStates.address,
-        RegistrationStates.education_place,
     ),
     F.text == "❌ Bekor qilish",
 )

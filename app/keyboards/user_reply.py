@@ -34,7 +34,6 @@ def edit_profile_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="Ism familya"), KeyboardButton(text="Telefon raqam")],
-            [KeyboardButton(text="Yashash manzili"), KeyboardButton(text="Ta’lim muassasasi")],
             [KeyboardButton(text="So‘rovnoma javoblari")],
             [KeyboardButton(text="❌ Bekor qilish")],
             [KeyboardButton(text="⬅️ Ortga")],

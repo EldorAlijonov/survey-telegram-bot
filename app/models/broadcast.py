@@ -22,8 +22,10 @@ class Broadcast(Base):
     admin_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_chat_id: Mapped[int] = mapped_column(BigInteger)
     source_message_id: Mapped[int] = mapped_column(Integer)
+    source_message_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     preview: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reply_markup: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[BroadcastStatus] = mapped_column(
         Enum(BroadcastStatus, name="broadcast_status"),
         default=BroadcastStatus.draft,

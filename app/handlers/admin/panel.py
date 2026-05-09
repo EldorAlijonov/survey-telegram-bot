@@ -10,6 +10,7 @@ from app.keyboards.admin_reply import (
     export_keyboard,
     subscription_manage_keyboard,
 )
+from app.utils.callbacks import safe_callback_answer
 
 router = Router(name="admin_panel")
 
@@ -32,7 +33,7 @@ async def cancel_admin_callback(callback: CallbackQuery, state: FSMContext) -> N
     if callback.message:
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.answer("Amal bekor qilindi.", reply_markup=admin_panel_keyboard())
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.message(F.text == "👤 Adminlar")

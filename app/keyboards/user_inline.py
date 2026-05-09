@@ -15,8 +15,6 @@ def build_inline_keyboard(buttons: list[tuple[str, str]], row_width: int = 2) ->
 def survey_question_keyboard(question: str) -> InlineKeyboardMarkup:
     buttons: dict[str, list[tuple[str, str]]] = {
         "q1": [("🟢 Yaxshi", "survey:q1:good"), ("🔴 Unchalik emas", "survey:q1:bad")],
-        "q2": [("🟢 Yaxshi", "survey:q2:good"), ("🔴 Unchalik emas", "survey:q2:bad")],
-        "q3": [("🟢 Ha", "survey:q3:yes"), ("🔴 Yo‘q", "survey:q3:no")],
         "q4": [
             ("🟢 08:00 dan 12:00 gacha", "survey:q4:morning"),
             ("🟢 12:00 dan 18:00 gacha", "survey:q4:afternoon"),

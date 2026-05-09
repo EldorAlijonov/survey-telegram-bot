@@ -9,6 +9,7 @@ from app.keyboards.admin_inline import subscription_delete_confirm_keyboard, sub
 from app.keyboards.admin_reply import subscription_cancel_keyboard, subscription_manage_keyboard
 from app.services.subscription_service import SubscriptionService
 from app.states.admin_states import SubscriptionManageStates
+from app.utils.callbacks import safe_callback_answer
 from app.utils.date_utils import format_dt
 from app.utils.pagination import clamp_page, pages_count
 
@@ -80,7 +81,7 @@ async def subscriptions_list_callback(
     if callback.message:
         text, keyboard = await build_subscriptions_page(subscription_service, page)
         await callback.message.edit_text(text, reply_markup=keyboard)
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("sub:toggle:"))
@@ -94,7 +95,7 @@ async def subscription_toggle(
         page = await subscription_service.page_for_channel(subscription_id, SUBSCRIPTION_PAGE_SIZE)
         new_text, keyboard = await build_subscriptions_page(subscription_service, page)
         await callback.message.edit_text(new_text, reply_markup=keyboard)
-    await callback.answer(text, show_alert=True)
+    await safe_callback_answer(callback, text, show_alert=True)
 
 
 @router.callback_query(F.data.startswith("sub:edit:"))
@@ -104,7 +105,7 @@ async def subscription_edit_start(callback: CallbackQuery, state: FSMContext) ->
     await state.update_data(subscription_action="edit", subscription_id=subscription_id)
     if callback.message:
         await callback.message.answer(EDIT_CHANNEL_PROMPT, reply_markup=subscription_cancel_keyboard())
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("sub:delete:"))
@@ -112,7 +113,7 @@ async def subscription_delete_prompt(callback: CallbackQuery, subscription_servi
     subscription_id = int(callback.data.split(":")[-1])
     subscription = await subscription_service.get_channel(subscription_id)
     if subscription is None:
-        await callback.answer("Kanal topilmadi.", show_alert=True)
+        await safe_callback_answer(callback, "Kanal topilmadi.", show_alert=True)
         return
     if callback.message:
         await callback.message.edit_text(
@@ -121,7 +122,7 @@ async def subscription_delete_prompt(callback: CallbackQuery, subscription_servi
             f"🔗 @{escape(subscription.channel_username)}",
             reply_markup=subscription_delete_confirm_keyboard(subscription_id),
         )
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("sub:delete_confirm:"))
@@ -132,7 +133,7 @@ async def subscription_delete_confirm(callback: CallbackQuery, subscription_serv
     if callback.message:
         new_text, keyboard = await build_subscriptions_page(subscription_service, page)
         await callback.message.edit_text(new_text, reply_markup=keyboard)
-    await callback.answer(text, show_alert=True)
+    await safe_callback_answer(callback, text, show_alert=True)
 
 
 @router.callback_query(F.data.startswith("sub:delete_cancel:"))
@@ -142,7 +143,7 @@ async def subscription_delete_cancel(callback: CallbackQuery, subscription_servi
     if callback.message:
         text, keyboard = await build_subscriptions_page(subscription_service, page)
         await callback.message.edit_text(text, reply_markup=keyboard)
-    await callback.answer("O'chirish bekor qilindi.")
+    await safe_callback_answer(callback, "O'chirish bekor qilindi.")
 
 
 async def build_subscriptions_page(subscription_service: SubscriptionService, page: int):

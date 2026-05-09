@@ -1,9 +1,11 @@
 import asyncio
+import json
 import logging
 from datetime import datetime
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.broadcast import Broadcast, BroadcastStatus
@@ -25,16 +27,20 @@ class BroadcastService:
         admin_username: str | None,
         chat_id: int,
         message_id: int,
+        message_ids: list[int],
         content_type: str | None,
         preview: str | None,
+        reply_markup: str | None,
     ) -> Broadcast:
         draft = await self.broadcasts.create_draft(
             admin_id=admin_id,
             admin_username=admin_username,
             source_chat_id=chat_id,
             source_message_id=message_id,
+            source_message_ids=serialize_message_ids(message_ids),
             content_type=content_type,
             preview=preview,
+            reply_markup=reply_markup,
         )
         await self.session.commit()
         return draft
@@ -52,8 +58,10 @@ class BroadcastService:
         broadcast_id: int,
         chat_id: int,
         message_id: int,
+        message_ids: list[int],
         content_type: str | None,
         preview: str | None,
+        reply_markup: str | None,
     ) -> tuple[bool, str]:
         broadcast = await self.broadcasts.get(broadcast_id)
         if broadcast is None:
@@ -62,8 +70,10 @@ class BroadcastService:
             return False, "❌ Yuborilayotgan reklamani tahrirlab bo'lmaydi."
         broadcast.source_chat_id = chat_id
         broadcast.source_message_id = message_id
+        broadcast.source_message_ids = serialize_message_ids(message_ids)
         broadcast.content_type = content_type
         broadcast.preview = preview
+        broadcast.reply_markup = reply_markup
         broadcast.status = BroadcastStatus.draft
         await self.session.commit()
         return True, "✅ Reklama yangilandi."
@@ -100,11 +110,20 @@ class BroadcastService:
 
         for index, telegram_id in enumerate(users, start=1):
             try:
-                await bot.copy_message(
-                    chat_id=telegram_id,
-                    from_chat_id=broadcast.source_chat_id,
-                    message_id=broadcast.source_message_id,
-                )
+                message_ids = parse_message_ids(broadcast)
+                if len(message_ids) == 1:
+                    await bot.copy_message(
+                        chat_id=telegram_id,
+                        from_chat_id=broadcast.source_chat_id,
+                        message_id=message_ids[0],
+                        reply_markup=parse_reply_markup(broadcast.reply_markup),
+                    )
+                else:
+                    await bot.copy_messages(
+                        chat_id=telegram_id,
+                        from_chat_id=broadcast.source_chat_id,
+                        message_ids=message_ids,
+                    )
                 broadcast.sent_count += 1
             except TelegramAPIError as exc:
                 broadcast.failed_count += 1
@@ -119,3 +138,28 @@ class BroadcastService:
         broadcast.finished_at = datetime.now()
         await self.session.commit()
         return broadcast
+
+
+def parse_reply_markup(value: str | None) -> InlineKeyboardMarkup | None:
+    if not value:
+        return None
+    return InlineKeyboardMarkup.model_validate_json(value)
+
+
+def serialize_message_ids(message_ids: list[int]) -> str | None:
+    if len(message_ids) <= 1:
+        return None
+    return json.dumps(message_ids)
+
+
+def parse_message_ids(broadcast: Broadcast) -> list[int]:
+    if not broadcast.source_message_ids:
+        return [broadcast.source_message_id]
+    try:
+        message_ids = json.loads(broadcast.source_message_ids)
+    except json.JSONDecodeError:
+        return [broadcast.source_message_id]
+    if not isinstance(message_ids, list):
+        return [broadcast.source_message_id]
+    parsed = [message_id for message_id in message_ids if isinstance(message_id, int)]
+    return parsed or [broadcast.source_message_id]

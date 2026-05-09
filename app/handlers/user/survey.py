@@ -10,40 +10,32 @@ from app.services.subscription_service import SubscriptionService
 from app.services.survey_service import SurveyService
 from app.services.user_service import UserService
 from app.states.user_states import SurveyStates
+from app.utils.callbacks import safe_callback_answer
 
 router = Router(name="user_survey")
 logger = logging.getLogger(__name__)
 
 QUESTIONS = {
     "q1": (
-        "<b>Savol 1/5</b>\n\n"
+        "<b>Savol 1/3</b>\n\n"
         "<b>Sizning zamonaviy kasblarga qiziqishingiz qanday?</b>\n\n"
         "Dasturlash, grafik dizayn, robototexnika, sun’iy intellekt, SMM"
     ),
-    "q2": (
-        "<b>Savol 2/5</b>\n\n"
-        "<b>Ta’lim muassasangizda zamonaviy kasblarni o‘rganish uchun sharoit qanday?</b>"
-    ),
-    "q3": (
-        "<b>Savol 3/5</b>\n\n"
-        "<b>Darsdan tashqari zamonaviy kasblarni o‘rganish niyatingiz bormi?</b>"
-    ),
     "q4": (
-        "<b>Savol 4/5</b>\n\n"
+        "<b>Savol 2/3</b>\n\n"
         "<b>Maktabdan tashqari qo‘shimcha darslarga qatnashish uchun sizga qulay vaqt qaysi?</b>"
     ),
-    "q5": "<b>Savol 5/5</b>\n\n<b>Zamonaviy kasblarning qaysi biri siz uchun qiziqarli?</b>",
+    "q5": "<b>Savol 3/3</b>\n\n<b>Zamonaviy kasblarning qaysi biri siz uchun qiziqarli?</b>",
 }
 
 STATE_BY_QUESTION = {
     "q1": SurveyStates.q1,
-    "q2": SurveyStates.q2,
-    "q3": SurveyStates.q3,
     "q4": SurveyStates.q4,
     "q5": SurveyStates.q5,
 }
 
-NEXT_QUESTION = {"q1": "q2", "q2": "q3", "q3": "q4", "q4": "q5"}
+NEXT_QUESTION = {"q1": "q4", "q4": "q5"}
+REQUIRED_QUESTIONS = set(QUESTIONS)
 
 
 async def send_question(message: Message, state: FSMContext, question: str) -> None:
@@ -70,11 +62,11 @@ async def start_survey(message: Message, state: FSMContext, user_service: UserSe
 async def survey_answer(callback: CallbackQuery, state: FSMContext) -> None:
     parts = (callback.data or "").split(":")
     if len(parts) != 3 or parts[0] != "survey":
-        await callback.answer("Noto‘g‘ri tugma.", show_alert=True)
+        await safe_callback_answer(callback, "Noto‘g‘ri tugma.", show_alert=True)
         return
     question, answer = parts[1], parts[2]
     if question not in QUESTIONS:
-        await callback.answer("Noto‘g‘ri savol.", show_alert=True)
+        await safe_callback_answer(callback, "Noto‘g‘ri savol.", show_alert=True)
         return
 
     data = await state.get_data()
@@ -84,7 +76,7 @@ async def survey_answer(callback: CallbackQuery, state: FSMContext) -> None:
 
     next_question = NEXT_QUESTION.get(question)
     if callback.message is None:
-        await callback.answer()
+        await safe_callback_answer(callback)
         return
     await callback.message.edit_reply_markup(reply_markup=None)
     if next_question:
@@ -100,7 +92,7 @@ async def survey_answer(callback: CallbackQuery, state: FSMContext) -> None:
             "Javoblaringizni yuborish uchun quyidagi tugmani bosing.",
             reply_markup=submit_survey_keyboard(),
         )
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data == "survey:submit")
@@ -114,8 +106,8 @@ async def submit_survey(
 ) -> None:
     data = await state.get_data()
     answers = data.get("answers", {})
-    if len(answers) < 5:
-        await callback.answer("Barcha savollarga javob bering.", show_alert=True)
+    if not REQUIRED_QUESTIONS.issubset(answers):
+        await safe_callback_answer(callback, "Barcha savollarga javob bering.", show_alert=True)
         return
     if callback.from_user is None or callback.message is None:
         return
@@ -125,7 +117,7 @@ async def submit_survey(
         subs = await subscription_service.get_all_active()
     except Exception:
         logger.exception("Active subscriptions fetch failed")
-        await callback.answer("Obuna kanallarini olishda xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.", show_alert=True)
+        await safe_callback_answer(callback, "Obuna kanallarini olishda xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.", show_alert=True)
         return
 
     if not subs:
@@ -136,7 +128,7 @@ async def submit_survey(
         subscription_message(len(subs)),
         reply_markup=subscription_keyboard(subs),
     )
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data == "check_subs")
@@ -152,17 +144,17 @@ async def check_all_subs(
     answers = data.get("answers", {})
     if callback.from_user is None or callback.message is None:
         return
-    if len(answers) < 5:
-        await callback.answer("So‘rovnoma javoblari topilmadi. Iltimos, so‘rovnomani qaytadan boshlang.", show_alert=True)
+    if not REQUIRED_QUESTIONS.issubset(answers):
+        await safe_callback_answer(callback, "So‘rovnoma javoblari topilmadi. Iltimos, so‘rovnomani qaytadan boshlang.", show_alert=True)
         return
 
     try:
         subs = await subscription_service.get_all_active()
     except Exception:
         logger.exception("Active subscriptions fetch failed")
-        await callback.answer("Obuna kanallarini olishda xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.", show_alert=True)
+        await safe_callback_answer(callback, "Obuna kanallarini olishda xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.", show_alert=True)
         return
-    await callback.answer()
+    await safe_callback_answer(callback)
 
     if not subs:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -207,9 +199,10 @@ async def finish_survey(
     if callback.message:
         await callback.message.answer(survey_service.format_summary(user, survey), reply_markup=remove_keyboard)
         await callback.message.answer(
-            "<b>Rahmat!</b>\n\nSo'rovnomangiz muvaffaqiyatli qabul qilindi. \n",
+            "<b>Rahmat!</b>\n\n"
+            "So'rovnomangiz muvaffaqiyatli qabul qilindi.\n\n"
             "<b>Savol va murojaatlar uchun @UstozRobotnik ga murojaat qiling.</b>",
             reply_markup=after_finish_keyboard(),
         )
     if answer_callback:
-        await callback.answer()
+        await safe_callback_answer(callback)

@@ -25,8 +25,6 @@ class UserService:
         *,
         full_name: str | None = None,
         phone: str | None = None,
-        address: str | None = None,
-        education_place: str | None = None,
         mark_registered: bool = False,
     ) -> User:
         user = await self.users.get_by_telegram_id(telegram_id)
@@ -36,10 +34,6 @@ class UserService:
             user.full_name = full_name
         if phone is not None:
             user.phone = phone
-        if address is not None:
-            user.address = address
-        if education_place is not None:
-            user.education_place = education_place
         if mark_registered:
             user.is_registered = True
         await self.session.commit()

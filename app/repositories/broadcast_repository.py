@@ -14,16 +14,20 @@ class BroadcastRepository:
         admin_username: str | None,
         source_chat_id: int,
         source_message_id: int,
+        source_message_ids: str | None,
         content_type: str | None,
         preview: str | None,
+        reply_markup: str | None,
     ) -> Broadcast:
         broadcast = Broadcast(
             admin_id=admin_id,
             admin_username=admin_username,
             source_chat_id=source_chat_id,
             source_message_id=source_message_id,
+            source_message_ids=source_message_ids,
             content_type=content_type,
             preview=preview,
+            reply_markup=reply_markup,
             status=BroadcastStatus.draft,
         )
         self.session.add(broadcast)
