@@ -42,6 +42,14 @@ class UserService:
     async def get_profile_with_surveys(self, telegram_id: int) -> User | None:
         return await self.users.get_with_surveys(telegram_id)
 
+    async def delete_by_telegram_id(self, telegram_id: int) -> tuple[bool, str]:
+        user = await self.users.get_by_telegram_id(telegram_id)
+        if user is None:
+            return False, "Foydalanuvchi topilmadi."
+        await self.users.delete_by_telegram_id(telegram_id)
+        await self.session.commit()
+        return True, "✅ Foydalanuvchi o'chirildi."
+
     async def mark_completed(self, telegram_id: int, subscribed: bool = True) -> User:
         user = await self.users.get_by_telegram_id(telegram_id)
         if user is None:

@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.config import Settings
-from app.keyboards.admin_inline import pagination_keyboard
+from app.keyboards.admin_inline import user_delete_confirm_keyboard, users_list_keyboard
 from app.keyboards.admin_reply import date_select_keyboard
 from app.services.user_service import UserService
 from app.states.admin_states import AdminUsersStates
@@ -44,15 +44,62 @@ async def users_custom_date_finish(
     await send_users_page(message, user_service, settings, day, 0)
 
 
-@router.callback_query(F.data.startswith("users:"))
+@router.callback_query(F.data.startswith("users:list:"))
 async def users_page_callback(callback: CallbackQuery, user_service: UserService, settings: Settings) -> None:
-    _, day_raw, page_raw = callback.data.split(":")
+    _, _, day_raw, page_raw = callback.data.split(":")
     day = date.fromisoformat(day_raw)
     page = int(page_raw)
     if callback.message:
         text, keyboard = await build_users_page(user_service, settings, day, page)
         await callback.message.edit_text(text, reply_markup=keyboard)
     await safe_callback_answer(callback)
+
+
+@router.callback_query(F.data.startswith("users:delete:"))
+async def user_delete_prompt(callback: CallbackQuery, user_service: UserService) -> None:
+    _, _, telegram_id_raw, day_raw, page_raw = callback.data.split(":")
+    telegram_id = int(telegram_id_raw)
+    user = await user_service.users.get_by_telegram_id(telegram_id)
+    if user is None:
+        await safe_callback_answer(callback, "Foydalanuvchi topilmadi.", show_alert=True)
+        return
+    username = escape("@" + user.username) if user.username else "-"
+    full_name = escape(user.full_name or "-")
+    if callback.message:
+        await callback.message.edit_text(
+            "Rostdan ham ushbu foydalanuvchini o'chirmoqchimisiz?\n\n"
+            f"ID: {user.telegram_id}\n"
+            f"Username: {username}\n"
+            f"Ism familya: {full_name}",
+            reply_markup=user_delete_confirm_keyboard(telegram_id, day_raw, int(page_raw)),
+        )
+    await safe_callback_answer(callback)
+
+
+@router.callback_query(F.data.startswith("users:delete_confirm:"))
+async def user_delete_confirm(callback: CallbackQuery, user_service: UserService, settings: Settings) -> None:
+    _, _, telegram_id_raw, day_raw, page_raw = callback.data.split(":")
+    telegram_id = int(telegram_id_raw)
+    day = date.fromisoformat(day_raw)
+    page = int(page_raw)
+    _, text = await user_service.delete_by_telegram_id(telegram_id)
+    total = await user_service.users.count_by_date(day)
+    page = clamp_page(page, total, settings.page_size)
+    if callback.message:
+        page_text, keyboard = await build_users_page(user_service, settings, day, page)
+        await callback.message.edit_text(page_text, reply_markup=keyboard or date_select_keyboard())
+    await safe_callback_answer(callback, text, show_alert=True)
+
+
+@router.callback_query(F.data.startswith("users:delete_cancel:"))
+async def user_delete_cancel(callback: CallbackQuery, user_service: UserService, settings: Settings) -> None:
+    _, _, day_raw, page_raw = callback.data.split(":")
+    day = date.fromisoformat(day_raw)
+    page = int(page_raw)
+    if callback.message:
+        text, keyboard = await build_users_page(user_service, settings, day, page)
+        await callback.message.edit_text(text, reply_markup=keyboard or date_select_keyboard())
+    await safe_callback_answer(callback, "O'chirish bekor qilindi.")
 
 
 async def send_users_page(message: Message, user_service: UserService, settings: Settings, day: date, page: int) -> None:
@@ -82,4 +129,4 @@ async def build_users_page(user_service: UserService, settings: Settings, day: d
             f"Sana: {format_dt(user.created_at)}\n"
         )
     rows.append(f"Sahifa: {page + 1}/{total_pages}")
-    return "\n".join(rows), pagination_keyboard(f"users:{day.isoformat()}", page, total_pages)
+    return "\n".join(rows), users_list_keyboard([user.telegram_id for user in users], day.isoformat(), page, total_pages)

@@ -1,6 +1,6 @@
 from datetime import date, datetime, time
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,6 +31,10 @@ class UserRepository:
         self.session.add(user)
         await self.session.flush()
         return user
+
+    async def delete_by_telegram_id(self, telegram_id: int) -> int:
+        result = await self.session.execute(delete(User).where(User.telegram_id == telegram_id))
+        return result.rowcount or 0
 
     async def count_all(self) -> int:
         return await self.session.scalar(select(func.count(User.id))) or 0

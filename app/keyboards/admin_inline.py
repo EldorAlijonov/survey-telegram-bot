@@ -17,6 +17,29 @@ def pagination_keyboard(prefix: str, page: int, total_pages: int) -> InlineKeybo
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 
+def users_list_keyboard(user_ids: list[int], day: str, page: int, total_pages: int) -> InlineKeyboardMarkup | None:
+    rows: list[list[InlineKeyboardButton]] = []
+    for telegram_id in user_ids:
+        rows.append(
+            [InlineKeyboardButton(text=f"рџ—‘ O'chirish {telegram_id}", callback_data=f"users:delete:{telegram_id}:{day}:{page}")]
+        )
+    nav = pagination_buttons(f"users:list:{day}", page, total_pages)
+    if nav:
+        rows.append(nav)
+    if not rows:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def user_delete_confirm_keyboard(telegram_id: int, day: str, page: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="вњ… Ha, o'chirish", callback_data=f"users:delete_confirm:{telegram_id}:{day}:{page}")],
+            [InlineKeyboardButton(text="вќЊ Bekor qilish", callback_data=f"users:delete_cancel:{day}:{page}")],
+        ]
+    )
+
+
 def admins_list_keyboard(admin_ids: list[tuple[int, bool]], page: int, total_pages: int) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for admin_id, can_delete in admin_ids:
