@@ -39,6 +39,15 @@ class UserRepository:
     async def count_all(self) -> int:
         return await self.session.scalar(select(func.count(User.id))) or 0
 
+    async def list_all(self, limit: int, offset: int) -> list[User]:
+        result = await self.session.execute(
+            select(User)
+            .order_by(User.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
+
     async def count_registered_on(self, day: date) -> int:
         start = datetime.combine(day, time.min)
         end = datetime.combine(day, time.max)

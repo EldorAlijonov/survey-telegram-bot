@@ -66,6 +66,7 @@ def cancel_admin_keyboard() -> ReplyKeyboardMarkup:
 def date_select_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
+            [KeyboardButton(text="Barcha userlar")],
             [KeyboardButton(text="Bugun"), KeyboardButton(text="Kecha")],
             [KeyboardButton(text="Sana kiritish")],
             [KeyboardButton(text="⬅️ Ortga"), KeyboardButton(text="🏠 Admin panel")],

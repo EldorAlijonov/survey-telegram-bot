@@ -17,25 +17,37 @@ def pagination_keyboard(prefix: str, page: int, total_pages: int) -> InlineKeybo
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 
-def users_list_keyboard(user_ids: list[int], day: str, page: int, total_pages: int) -> InlineKeyboardMarkup | None:
+def page_number_buttons(prefix: str, current_page: int, total_pages: int, row_width: int = 5) -> list[list[InlineKeyboardButton]]:
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for page in range(total_pages):
+        text = f"[{page + 1}]" if page == current_page else str(page + 1)
+        row.append(InlineKeyboardButton(text=text, callback_data=f"{prefix}:{page}"))
+        if len(row) == row_width:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    return rows
+
+
+def users_list_keyboard(user_ids: list[int], scope: str, page: int, total_pages: int) -> InlineKeyboardMarkup | None:
     rows: list[list[InlineKeyboardButton]] = []
     for telegram_id in user_ids:
         rows.append(
-            [InlineKeyboardButton(text=f"рџ—‘ O'chirish {telegram_id}", callback_data=f"users:delete:{telegram_id}:{day}:{page}")]
+            [InlineKeyboardButton(text=f"🗑 O'chirish {telegram_id}", callback_data=f"users:delete:{telegram_id}:{scope}:{page}")]
         )
-    nav = pagination_buttons(f"users:list:{day}", page, total_pages)
-    if nav:
-        rows.append(nav)
+    rows.extend(page_number_buttons(f"users:list:{scope}", page, total_pages))
     if not rows:
         return None
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def user_delete_confirm_keyboard(telegram_id: int, day: str, page: int) -> InlineKeyboardMarkup:
+def user_delete_confirm_keyboard(telegram_id: int, scope: str, page: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="вњ… Ha, o'chirish", callback_data=f"users:delete_confirm:{telegram_id}:{day}:{page}")],
-            [InlineKeyboardButton(text="вќЊ Bekor qilish", callback_data=f"users:delete_cancel:{day}:{page}")],
+            [InlineKeyboardButton(text="✅ Ha, o'chirish", callback_data=f"users:delete_confirm:{telegram_id}:{scope}:{page}")],
+            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"users:delete_cancel:{scope}:{page}")],
         ]
     )
 

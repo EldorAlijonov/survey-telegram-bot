@@ -55,7 +55,7 @@ async def broadcast_menu(message: Message, state: FSMContext) -> None:
 
 @router.message(F.text == "👥 Foydalanuvchilar")
 async def users_menu(message: Message) -> None:
-    await message.answer("Qaysi sana bo'yicha ko'rmoqchisiz?", reply_markup=date_select_keyboard())
+    await message.answer("Foydalanuvchilarni ko'rish turini tanlang.", reply_markup=date_select_keyboard())
 
 
 @router.message(F.text == "📥 Excel yuklab olish")
